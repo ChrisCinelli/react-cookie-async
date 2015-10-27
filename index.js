@@ -1,18 +1,37 @@
 var cookie = require('cookie');
 
-var _rawCookie = {};
-var _res = undefined;
+var requestHandle = 1;
+var _rawCookies = {};
+var _res = {};
 
-function load(name, doNotParse) {
+var _generalHandle = -1;
+
+//true is used for debugging
+var _doNotCleanUp = false;
+
+function checkIfItExists(handle){
+  if(!_rawCookies[handle]) {
+    throw "The handle '"+handle+"' doesn't exist, the request is probably over";
+  }
+}
+
+function load(name, opt) {
   var cookies = {};
+
+  opt = opt || {};
+  //Back compatibility and shortcut
+  if(typeof opt === "boolean"){
+    opt = {doNotParse : opt}
+  }
+  opt.handle = opt.handle || _generalHandle;
 
   if (typeof document !== 'undefined') {
     cookies = cookie.parse(document.cookie);
   }
 
-  var cookieVal = (cookies && cookies[name]) || _rawCookie[name];
+  var cookieVal = (cookies && cookies[name]) || (_rawCookies[opt.handle] && _rawCookies[opt.handle][name]);
 
-  if (!doNotParse) {
+  if (!opt.doNotParse) {
     try {
       cookieVal = JSON.parse(cookieVal);
     } catch(e) {
@@ -24,25 +43,39 @@ function load(name, doNotParse) {
 }
 
 function save(name, val, opt) {
-  _rawCookie[name] = val;
+  opt = opt || {};  
+  opt.handle = opt.handle || _generalHandle;
+
+  if(!_rawCookies[opt.handle]){
+    _rawCookies[opt.handle] = {};
+  }
+  _rawCookies[opt.handle][name] = val;
 
   // allow you to work with cookies as objects.
   if (typeof val === 'object') {
-    _rawCookie[name] = JSON.stringify(val);
+    _rawCookies[opt.handle][name] = JSON.stringify(val);
   }
 
   // Cookies only work in the browser
   if (typeof document !== 'undefined') {
-    document.cookie = cookie.serialize(name, _rawCookie[name], opt);
+    document.cookie = cookie.serialize(name, _rawCookies[opt.handle][name], opt);
   }
 
-  if (_res && _res.cookie) {
-    _res.cookie(name, val, opt);
+  if (_res[opt.handle] && _res[opt.handle].cookie) {
+    _res[opt.handle].cookie(name, val, opt);
   }
 }
 
 function remove(name, opt) {
-  delete _rawCookie[name];
+  opt = opt || {};  
+  opt.handle = opt.handle || _generalHandle;
+
+  if(!_rawCookies[opt.handle]){
+    _rawCookies[opt.handle] = {};
+  }
+
+  if(_rawCookies[opt.handle][name])
+    delete _rawCookies[opt.handle][name];
 
   if (typeof document !== 'undefined') {
     if (typeof opt === 'undefined') {
@@ -57,33 +90,61 @@ function remove(name, opt) {
     document.cookie = cookie.serialize(name, '', opt);
   }
 
-  if (_res && _res.clearCookie) {
+  if (_res[opt.handle] && _res[opt.handle].clearCookie) {
     var opt = path ? { path: path } : undefined;
-    _res.clearCookie(name, opt);
+    _res[opt.handle].clearCookie(name, opt);
   }
 }
 
-function setRawCookie(rawCookie) {
+function setRawCookie(rawCookie, opt) {
+  opt = opt || {};  
+  opt.handle = opt.handle || _generalHandle;
+
   if (rawCookie) {
-    _rawCookie = cookie.parse(rawCookie);
+    _rawCookies[opt.handle] = cookie.parse(rawCookie);
   } else {
-    _rawCookie = {};
+    _rawCookies[opt.handle] = {};
   }
 }
 
-function plugToRequest(req, res) {
+function _cleanup(handle){
+  return function() {
+    if(_doNotCleanUp) return;
+
+    if(_rawCookies[handle]) delete _rawCookies[handle];
+    if(_res[handle]) delete _res[handle];
+  }
+};
+
+
+function plugToRequest(req, res, opt) {
+  opt = opt || {};  
+
+  var _requestHandle = opt.useHandles ? opt.handle || requestHandle++ : _generalHandle;
+
   if (req.cookie) {
-    _rawCookie = req.cookie;
+    _rawCookies[_requestHandle] = req.cookie;
   } else if (req.headers && req.headers.cookie) {
-    setRawCookie(req.headers.cookie);
+    setRawCookie(req.headers.cookie, {handle : _requestHandle});
   } else {
-    _rawCookie = {};
+    _rawCookies[_requestHandle] = {};
   }
 
-  _res = res;
+  if(res){
+    _res[_requestHandle] = res;
+
+    res.on("finish", _cleanup(_requestHandle));
+    res.on("error",  _cleanup(_requestHandle));
+  }
+
+  return _requestHandle;
 }
 
 var reactCookie = {
+  //The generic handle can be used on the browser
+  //where there is not problem.
+  SYNC_REQ_ID       : _generalHandle,
+  BROWSER_REQ_ID    : _generalHandle,
   load: load,
   save: save,
   remove: remove,

@@ -75,6 +75,16 @@ var MyApp = React.createClass({
 module.exports = MyApp;
 ```
 
+## Support for async multiple requests server side
+If you have async requests going on the server side you need to save 
+the handle of the request returned by `reactCookie.plugToRequest(req, res, {useHandles : true});` (probably in the context) and use it as opt=`{handle : thisRequestId}` in all the methods.
+
+```
+  TODO: Add example goes here
+
+```
+
+
 ## Without CommonJS
 You can use react-cookie with anything by using the global variable `reactCookie`.
 
