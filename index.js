@@ -68,6 +68,16 @@ function save(name, val, opt) {
 
 function remove(name, opt) {
   opt = opt || {};  
+
+ if (typeof opt === 'string') {
+    // Will be deprecated in future versions
+    opt = { path: opt };
+  }
+
+  if (!opt.path){
+    opt.path = '/';
+  }
+
   opt.handle = opt.handle || _generalHandle;
 
   if(!_rawCookies[opt.handle]){
@@ -77,22 +87,14 @@ function remove(name, opt) {
   if(_rawCookies[opt.handle][name])
     delete _rawCookies[opt.handle][name];
 
+  opt.expires = new Date(1970, 1, 1, 0, 0, 1);
+
   if (typeof document !== 'undefined') {
-    if (typeof opt === 'undefined') {
-      opt = {};
-    } else if (typeof opt === 'string') {
-      // Will be deprecated in future versions
-      opt = { path: opt };
-    }
-
-    opt.expires = new Date(1970, 1, 1, 0, 0, 1);
-
     document.cookie = cookie.serialize(name, '', opt);
   }
 
   if (_res[opt.handle] && _res[opt.handle].clearCookie) {
-    var opt = path ? { path: path } : undefined;
-    _res[opt.handle].clearCookie(name, opt);
+    _res[opt.handle].cookie(name, '',  opt);
   }
 }
 
