@@ -62,7 +62,7 @@ function save(name, val, opt) {
   }
 
   if (_res[opt.handle] && _res[opt.handle].cookie) {
-    _res[opt.handle].cookie(name, val, opt);
+    _res[opt.handle].cookie(name, _rawCookies[opt.handle][name], opt);
   }
 }
 
